@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Point
+import android.graphics.drawable.BitmapDrawable
 import android.os.Build
 import android.os.Bundle
 import android.print.PrintAttributes
@@ -20,12 +21,16 @@ import com.github.salomonbrys.kodein.LazyKodein
 import com.github.salomonbrys.kodein.android.appKodein
 import com.github.salomonbrys.kodein.instance
 import kotlinx.android.synthetic.main.activity_show_qr.*
+import kotlinx.coroutines.experimental.CommonPool
+import kotlinx.coroutines.experimental.android.UI
+import kotlinx.coroutines.experimental.async
 import net.glxn.qrgen.android.QRCode
 import org.ligi.kaxt.doAfterEdit
 import org.ligi.kaxt.setVisibility
 import org.walleth.R
 import org.walleth.data.keystore.WallethKeyStore
 import org.walleth.data.networks.CurrentAddressProvider
+import org.walleth.functions.AliasingDrawableWrapper
 import java.io.ByteArrayOutputStream
 
 
@@ -66,16 +71,17 @@ class ExportKeyActivity : AppCompatActivity() {
     }
 
     private fun generate() {
-        Thread(Runnable {
-            keyJSON = keyStore.exportKey(address = currentAddressProvider.getCurrent(), unlockPassword = "default", exportPassword = password_input.text.toString())
+        async(UI) {
+            val bmpScaled = async(CommonPool) {
+                keyJSON = keyStore.exportKey(address = currentAddressProvider.getCurrent(), unlockPassword = "default", exportPassword = password_input.text.toString())
 
-            val point = Point()
-            windowManager.defaultDisplay.getSize(point)
-            val bmpScaled = Bitmap.createScaledBitmap(QRCode.from(keyJSON).bitmap(), point.x, point.x, false)
-            runOnUiThread {
-                qrcode_image.setImageBitmap(bmpScaled)
-            }
-        }).start()
+                val point = Point()
+                windowManager.defaultDisplay.getSize(point)
+                Bitmap.createScaledBitmap(QRCode.from(keyJSON).bitmap(), point.x, point.x, false)
+            }.await()
+            qrcode_image.setImageDrawable(AliasingDrawableWrapper(BitmapDrawable(resources, bmpScaled)))
+
+        }
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
@@ -111,14 +117,14 @@ class ExportKeyActivity : AppCompatActivity() {
     var mWebView: WebView? = null
     private fun doWebViewPrint() {
         val webView = WebView(this)
-        webView.setWebViewClient(object : WebViewClient() {
+        webView.webViewClient = object : WebViewClient() {
 
             @SuppressLint("NewApi") // we hide the menu entry for SDK < 19 so they *should* never land here
             override fun onPageFinished(view: WebView, url: String) {
                 createWebPrintJob(view)
                 mWebView = null
             }
-        })
+        }
 
         val bos = ByteArrayOutputStream()
         val qrCode = QRCode.from(keyJSON)
