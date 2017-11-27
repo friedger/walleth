@@ -171,6 +171,9 @@ dependencies {
 
     kapt "android.arch.lifecycle:compiler:$arch_version"
 
+    debugCompile 'com.squareup.leakcanary:leakcanary-android:1.5.4'
+    releaseCompile 'com.squareup.leakcanary:leakcanary-android-no-op:1.5.4'
+
     androidTestCompile 'com.google.truth:truth:0.36'
 
     testCompile "org.mockito:mockito-core:2.8.47"
