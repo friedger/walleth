@@ -16,11 +16,14 @@ import kotlinx.coroutines.experimental.async
 import org.kethereum.model.Address
 import org.ligi.kaxtui.alert
 import org.walleth.R
+import org.walleth.activities.qrscan.REQUEST_CODE
 import org.walleth.activities.qrscan.startScanActivityForResult
 import org.walleth.data.AppDatabase
 import org.walleth.data.networks.NetworkDefinitionProvider
 import org.walleth.data.tokens.Token
 
+
+const val REQUEST_CODE_DEPLOY = 1
 
 class CreateTokenDefinitionActivity : AppCompatActivity() {
 
@@ -81,6 +84,9 @@ class CreateTokenDefinitionActivity : AppCompatActivity() {
         data?.let {
             if (data.hasExtra("SCAN_RESULT")) {
                 token_address_input.setText(data.getStringExtra("SCAN_RESULT"))
+            } else if (requestCode == REQUEST_CODE_DEPLOY) {
+                token_name_input.setText(data.getStringExtra(EXTRA_NAME))
+                token_address_input.setText(data.getStringExtra(EXTRA_ADDRESS))
             }
         }
     }
@@ -92,6 +98,10 @@ class CreateTokenDefinitionActivity : AppCompatActivity() {
         }
         R.id.menu_scan -> {
             startScanActivityForResult(this)
+            true
+        }
+        R.id.menu_open -> {
+            startActivityForResult(getDeployIntent(), REQUEST_CODE_DEPLOY)
             true
         }
         else -> super.onOptionsItemSelected(item)

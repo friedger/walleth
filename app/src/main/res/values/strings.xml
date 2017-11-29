@@ -177,4 +177,10 @@ Unfortunately there is no faucet for the test-net. So if you want to try out thi
     <string name="scan">Scan</string>
     <string name="scan_disabled">Scan disabled</string>
     <string name="network_subtitle">Networks</string>
+    <string name="contract_deploy_abi_input_hint">The token/contract abi</string>
+    <string name="contract_deploy_name_input_hint">The token/contract name</string>
+    <string name="contract_deploy_gas_input_hint">The gas</string>
+    <string name="deploy_token_subtitle">Deploy token/contract</string>
+    <string name="deployed_token_alert_message">Token/contract deployed at %1$s</string>
+    <string name="contract_deploy_byte_code_input_hint">The token/contract byte code</string>
 </resources>
