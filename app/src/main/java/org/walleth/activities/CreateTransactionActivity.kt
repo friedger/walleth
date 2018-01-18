@@ -263,18 +263,31 @@ class CreateTransactionActivity : AppCompatActivity() {
 
             currentERC67String = if (uri.startsWith("0x")) "ethereum:$uri" else uri
 
-            if (parseERC681(currentERC67String!!).valid) {
-                val erc681 = parseERC681(currentERC67String!!)
+            val erc681 = parseERC681(currentERC67String!!)
+            if (erc681.valid) {
 
                 showWarningOnWrongNetwork(erc681)
 
+                if (erc681.function == "transfer") {
+                    val token = appDatabase.tokens.forAddress(Address(erc681.address!!))
+                    if (token != null) {
+                        erc681.functionParams["uint256"]?.let {
+                            amount_input.setText((BigDecimal(it).setScale(4) / BigDecimal("1" + token.decimalsInZeroes())).toString())
+                            currentAmount = it
+                        }
+
+                        erc681.functionParams["address"]?.let {
+                            to_address.text = it
+                        }
+                    }
+                } else {
                 appDatabase.addressBook.resolveNameAsync(Address(erc681.address!!)) {
                     to_address.text = it
                 }
-
-                erc681.value?.let {
-                    amount_input.setText((BigDecimal(it).setScale(4) / BigDecimal("1" + currentTokenProvider.currentToken.decimalsInZeroes())).toString())
-                    currentAmount = it
+                    erc681.value?.let {
+                        amount_input.setText((BigDecimal(it).setScale(4) / BigDecimal("1" + currentTokenProvider.currentToken.decimalsInZeroes())).toString())
+                        currentAmount = it
+                    }
                 }
             } else {
                 to_address.text = getString(R.string.no_address_selected)

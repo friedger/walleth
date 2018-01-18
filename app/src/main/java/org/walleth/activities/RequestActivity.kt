@@ -46,7 +46,7 @@ class RequestActivity : AppCompatActivity() {
         refreshQR()
 
 
-        val initText = getString(if (networkDefinitionProvider.getCurrent().isNoTestNet() ) {
+        val initText = getString(if (networkDefinitionProvider.getCurrent().isNoTestNet()) {
             R.string.request_hint_no_test_net
         } else {
             R.string.request_hint_test_net
@@ -75,22 +75,20 @@ class RequestActivity : AppCompatActivity() {
                 try {
                     val currentToken = currentTokenProvider.currentToken
 
-                    currentERC67String = ERC681(address = relevantAddress.hex,value =value_input_edittext.text.toString().extractValueForToken(currentToken) ).generateURL()
+                    currentERC67String = ERC681(address = relevantAddress.hex, value = value_input_edittext.text.toString().extractValueForToken(currentToken)).generateURL()
                 } catch (e: NumberFormatException) {
                 }
             }
         } else {
             val relevantAddress = currentTokenProvider.currentToken.address
-            currentERC67String = ERC681(address = relevantAddress.hex).generateURL()
+            val tokenTo = currentAddressProvider.getCurrent().hex;
+            val functionParams = mutableMapOf("address" to tokenTo)
             if (add_value_checkbox.isChecked) {
-                try {
-                    currentERC67String = currentERC67String + "?function=transfer(address " +
-                            currentAddressProvider.getCurrent().hex + ", uint " +
-                            value_input_edittext.text.toString() + ")"
-                } catch (e: NumberFormatException) {
-                }
+                val value = value_input_edittext.text.toString()
+                functionParams.put("uint256", value)
             }
-
+            currentERC67String = ERC681(address = relevantAddress.hex, function = "transfer",
+                    query = functionParams.map { it.key + "=" + it.value }.joinToString(separator = "&")).generateURL()
         }
 
         receive_qrcode.setQRCode(currentERC67String)
