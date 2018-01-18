@@ -140,7 +140,6 @@ class MainActivity : AppCompatActivity(), SharedPreferences.OnSharedPreferenceCh
         empty_view_container.setVisibility(!hasTransactions && !onboardingController.isShowing)
         transaction_recycler_out.setVisibility(hasTransactions)
         transaction_recycler_in.setVisibility(hasTransactions)
-        send_container.setVisibility(hasTransactions, INVISIBLE)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -249,6 +248,7 @@ class MainActivity : AppCompatActivity(), SharedPreferences.OnSharedPreferenceCh
 
         if (it != null) {
             value_view.setValue(it.balance, currentTokenProvider.currentToken)
+            send_container.setVisibility(it.balance > ZERO, INVISIBLE)
             supportActionBar?.subtitle = getString(R.string.main_activity_block, it.block)
         } else {
             value_view.setValue(ZERO, currentTokenProvider.currentToken)
