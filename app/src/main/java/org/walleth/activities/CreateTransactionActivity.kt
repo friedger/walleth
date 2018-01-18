@@ -26,6 +26,7 @@ import org.ligi.kaxt.doAfterEdit
 import org.ligi.kaxt.startActivityFromURL
 import org.ligi.kaxtui.alert
 import org.walleth.R
+import org.walleth.activities.qrscan.REQUEST_CODE
 import org.walleth.activities.qrscan.startScanActivityForResult
 import org.walleth.activities.trezor.TREZOR_REQUEST_CODE
 import org.walleth.activities.trezor.startTrezorActivity
@@ -38,7 +39,9 @@ import org.walleth.data.addressbook.resolveNameAsync
 import org.walleth.data.balances.Balance
 import org.walleth.data.networks.CurrentAddressProvider
 import org.walleth.data.networks.NetworkDefinitionProvider
+import org.walleth.data.networks.getNetworkDefinitionByChainID
 import org.walleth.data.tokens.CurrentTokenProvider
+import org.walleth.data.tokens.Token
 import org.walleth.data.tokens.getEthTokenForChain
 import org.walleth.data.tokens.isETH
 import org.walleth.data.transactions.TransactionState
@@ -53,10 +56,13 @@ import java.math.BigInteger.ONE
 import java.math.BigInteger.ZERO
 import java.text.ParseException
 
+const val SELECT_ADDRESS_REQUEST_CODE = 1;
+
 class CreateTransactionActivity : AppCompatActivity() {
 
     private var currentERC67String: String? = null
     private var currentAmount: BigInteger? = null
+    private var currentChainId: Long? = null
 
     private val currentAddressProvider: CurrentAddressProvider by LazyKodein(appKodein).instance()
     private val networkDefinitionProvider: NetworkDefinitionProvider by LazyKodein(appKodein).instance()
@@ -65,6 +71,7 @@ class CreateTransactionActivity : AppCompatActivity() {
     private var currentBalance: Balance? = null
     private var lastWarningURI: String? = null
 
+
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         when (requestCode) {
             TREZOR_REQUEST_CODE -> {
@@ -72,11 +79,18 @@ class CreateTransactionActivity : AppCompatActivity() {
                     finish()
                 }
             }
-            else -> data?.let {
-                if (data.hasExtra("HEX")) {
-                    setToFromURL(data.getStringExtra("HEX"), fromUser = true)
-                } else if (data.hasExtra("SCAN_RESULT")) {
-                    setToFromURL(data.getStringExtra("SCAN_RESULT"), fromUser = true)
+            SELECT_ADDRESS_REQUEST_CODE -> {
+                data?.let {
+                    if (data.hasExtra("HEX")) {
+                        to_address.text = data.getStringExtra("HEX")
+                    }
+                }
+            }
+            REQUEST_CODE -> {
+                data?.let {
+                    if (data.hasExtra("SCAN_RESULT")) {
+                        setValuesFromURL(data.getStringExtra("SCAN_RESULT"), fromUser = true)
+                    }
                 }
             }
         }
@@ -99,6 +113,8 @@ class CreateTransactionActivity : AppCompatActivity() {
             lastWarningURI = savedInstanceState.getString("lastERC67")
         }
 
+        currentChainId = networkDefinitionProvider.getCurrent().chain.id
+
         supportActionBar?.subtitle = getString(R.string.create_transaction_subtitle)
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
 
@@ -111,7 +127,7 @@ class CreateTransactionActivity : AppCompatActivity() {
 
             fab.setOnClickListener {
 
-                if (currentERC67String == null) {
+                if (to_address.text.isEmpty()) {
                     alert(R.string.create_tx_error_address_must_be_specified)
                 } else if (currentAmount == null) {
                     alert(R.string.create_tx_error_amount_must_be_specified)
@@ -119,45 +135,40 @@ class CreateTransactionActivity : AppCompatActivity() {
                     alert(R.string.create_tx_error_not_enough_funds)
                 } else if (nonce_input.text.isBlank()) {
                     alert(title = R.string.nonce_invalid, message = R.string.please_enter_name)
-                } else {
-                    val erc681 = parseERC681(currentERC67String!!)
-                    if (!showWarningOnWrongNetwork(erc681)) {
-                        val toAddressString = erc681.address
-                        if (toAddressString == null) {
-                            alert(R.string.create_tx_no_address)
-                        } else {
-                            val toAddress = Address(toAddressString)
-                            val transaction = (if (currentTokenProvider.currentToken.isETH()) createTransactionWithDefaults(
-                                    value = currentAmount!!,
-                                    to = toAddress,
-                                    from = currentAddressProvider.getCurrent()
-                            ) else createTransactionWithDefaults(
-                                    creationEpochSecond = System.currentTimeMillis() / 1000,
-                                    value = ZERO,
-                                    to = currentTokenProvider.currentToken.address,
-                                    from = currentAddressProvider.getCurrent(),
-                                    input = createTokenTransferTransactionInput(toAddress, currentAmount)
-                            )).copy(chain = networkDefinitionProvider.getCurrent().chain, creationEpochSecond = System.currentTimeMillis() / 1000)
+                } else if (!showWarningOnWrongNetwork(currentChainId)) {
 
-                            transaction.nonce = nonce_input.asBigInit()
-                            transaction.gasPrice = gas_price_input.asBigInit()
-                            transaction.gasLimit = gas_limit_input.asBigInit()
-                            transaction.txHash = transaction.encodeRLP().keccak().toHexString()
+                    val toAddressString = to_address.text
+                    if (toAddressString.isEmpty()) {
+                        alert(R.string.create_tx_no_address)
+                    } else {
+                        val toAddress = Address(toAddressString.toString())
+                        val transaction = (if (currentTokenProvider.currentToken.isETH()) createTransactionWithDefaults(
+                                value = currentAmount!!,
+                                to = toAddress,
+                                from = currentAddressProvider.getCurrent()
+                        ) else createTransactionWithDefaults(
+                                value = ZERO,
+                                to = currentTokenProvider.currentToken.address,
+                                from = currentAddressProvider.getCurrent(),
+                                input = createTokenTransferTransactionInput(toAddress, currentAmount)
+                        )).copy(chain = networkDefinitionProvider.getCurrent().chain, creationEpochSecond = System.currentTimeMillis() / 1000)
 
-                            when {
+                        transaction.nonce = nonce_input.asBigInit()
+                        transaction.gasPrice = gas_price_input.asBigInit()
+                        transaction.gasLimit = gas_limit_input.asBigInit()
+                        transaction.txHash = transaction.encodeRLP().keccak().toHexString()
 
-                                isTrezorTransaction -> startTrezorActivity(TransactionParcel(transaction))
-                                else -> async(CommonPool) {
-                                    appDatabase.transactions.upsert(transaction.toEntity(signatureData = null, transactionState = TransactionState()))
-                                    finish()
-                                }
+                        when {
 
+                            isTrezorTransaction -> startTrezorActivity(TransactionParcel(transaction))
+                            else -> async(CommonPool) {
+                                appDatabase.transactions.upsert(transaction.toEntity(signatureData = null, transactionState = TransactionState()))
+                                finish()
                             }
                         }
                     }
                 }
             }
-
         }
 
 
@@ -202,6 +213,8 @@ class CreateTransactionActivity : AppCompatActivity() {
             nonce_input_container.visibility = View.VISIBLE
         }
 
+        setValuesFromURL(currentERC67String, false)
+
         appDatabase.transactions.getNonceForAddressLive(currentAddressProvider.getCurrent(), networkDefinitionProvider.getCurrent().chain).observe(this, Observer {
             nonce_input.setText(if (it != null && !it.isEmpty()) {
                 it.max()!! + ONE
@@ -210,7 +223,6 @@ class CreateTransactionActivity : AppCompatActivity() {
             }.toString())
         })
         refreshFee()
-        setToFromURL(currentERC67String, false)
 
         scan_button.setOnClickListener {
             startScanActivityForResult(this)
@@ -218,7 +230,7 @@ class CreateTransactionActivity : AppCompatActivity() {
 
         address_list_button.setOnClickListener {
             val intent = Intent(this@CreateTransactionActivity, AddressBookActivity::class.java)
-            startActivityForResult(intent, 23451)
+            startActivityForResult(intent, SELECT_ADDRESS_REQUEST_CODE)
         }
 
         amount_input.doAfterEdit {
@@ -258,55 +270,75 @@ class CreateTransactionActivity : AppCompatActivity() {
         super.onSaveInstanceState(outState)
     }
 
-    private fun setToFromURL(uri: String?, fromUser: Boolean) {
+    private fun setValuesFromURL(uri: String?, fromUser: Boolean) {
         if (uri != null) {
-
-            currentERC67String = if (uri.startsWith("0x")) "ethereum:$uri" else uri
-
+            currentERC67String = uri
             val erc681 = parseERC681(currentERC67String!!)
-            if (erc681.valid) {
+            setValuesFromERC681(erc681, fromUser, uri)
+        }
+    }
 
-                showWarningOnWrongNetwork(erc681)
+    private fun setValuesFromERC681(epi681: ERC681, fromUser: Boolean, uri: String) {
+        if (epi681.valid) {
 
-                if (erc681.function == "transfer") {
-                    val token = appDatabase.tokens.forAddress(Address(erc681.address!!))
-                    if (token != null) {
-                        erc681.functionParams["uint256"]?.let {
-                            amount_input.setText((BigDecimal(it).setScale(4) / BigDecimal("1" + token.decimalsInZeroes())).toString())
-                            currentAmount = it
-                        }
+            showWarningOnWrongNetwork(epi681.chainId)
 
-                        erc681.functionParams["address"]?.let {
-                            to_address.text = it
-                        }
+            currentChainId = epi681.chainId
+
+            if (epi681.function == "transfer") {
+                val token = appDatabase.tokens.forAddress(Address(epi681.address!!))
+
+                if (token != null) {
+                    currentTokenProvider.currentToken = token
+                    epi681.functionParams["uint256"]?.let {
+                        amount_input.setText((BigDecimal(it).setScale(4) / BigDecimal("1" + token.decimalsInZeroes())).toString())
+                        currentAmount = BigInteger(it)
                     }
-                } else {
-                appDatabase.addressBook.resolveNameAsync(Address(erc681.address!!)) {
+                }
+
+                epi681.functionParams["address"]?.let {
                     to_address.text = it
                 }
-                    erc681.value?.let {
-                        amount_input.setText((BigDecimal(it).setScale(4) / BigDecimal("1" + currentTokenProvider.currentToken.decimalsInZeroes())).toString())
-                        currentAmount = it
-                    }
-                }
+
             } else {
-                to_address.text = getString(R.string.no_address_selected)
+                getEthTokenForChainId(epi681.chainId)?.let {
+                    currentTokenProvider.currentToken = it
+                }
+                appDatabase.addressBook.resolveNameAsync(Address(epi681.address!!)) {
+                    to_address.text = it
+                }
+                epi681.value?.let {
+                    amount_input.setText((BigDecimal(it).setScale(4) / BigDecimal("1" + currentTokenProvider.currentToken.decimalsInZeroes())).toString())
+                    currentAmount = it
+                }
+            }
+        } else {
+            to_address.text = getString(R.string.no_address_selected)
 
-                if (fromUser || lastWarningURI != uri) {
-                    lastWarningURI = uri
-                    if (uri.isEthereumURLString()) {
-                        alert(getString(R.string.create_tx_error_invalid_erc67_msg, uri), getString(R.string.create_tx_error_invalid_erc67_title))
-                    } else {
-                        alert(getString(R.string.create_tx_error_invalid_address, uri))
-                    }
-
+            if (fromUser || lastWarningURI != uri) {
+                lastWarningURI = uri
+                if (uri.isEthereumURLString()) {
+                    alert(getString(R.string.create_tx_error_invalid_erc67_msg, uri), getString(R.string.create_tx_error_invalid_erc67_title))
                 }
             }
         }
     }
 
-    private fun showWarningOnWrongNetwork(erc681: ERC681): Boolean {
-        if (erc681.chainId != null && erc681.chainId != networkDefinitionProvider.getCurrent().chain.id) {
+    private fun getEthTokenForChainId(chainId: Long?): Token? {
+        if (chainId == null) {
+            return getEthTokenForChain(networkDefinitionProvider.getCurrent())
+        } else {
+            val networkDefinition = getNetworkDefinitionByChainID(chainId)
+            if (networkDefinition != null) {
+                return getEthTokenForChain(networkDefinition)
+            } else {
+                return null
+            }
+        }
+    }
+
+    private fun showWarningOnWrongNetwork(chainId: Long?): Boolean {
+        if (chainId != null && chainId != networkDefinitionProvider.getCurrent().chain.id) {
             alert(title = R.string.wrong_network, message = R.string.please_switch_network)
             return true
         }
@@ -321,3 +353,9 @@ class CreateTransactionActivity : AppCompatActivity() {
         else -> super.onOptionsItemSelected(item)
     }
 }
+
+val ERC681.functionParams: Map<String, String>
+    get() = query.split("&")
+            .map { it.split("=", limit = 2) }
+            .map { it.first() to it.getOrElse(1, { "true" }) }
+            .toMap()
