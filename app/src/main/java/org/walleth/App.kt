@@ -9,6 +9,7 @@ import android.support.multidex.MultiDex
 import android.support.multidex.MultiDexApplication
 import android.support.v4.content.ContextCompat
 import android.support.v7.app.AppCompatDelegate
+import android.util.Log
 import com.chibatching.kotpref.Kotpref
 import com.github.salomonbrys.kodein.*
 import com.github.salomonbrys.kodein.android.appKodein
@@ -37,10 +38,29 @@ import org.walleth.data.networks.NetworkDefinitionProvider
 import org.walleth.data.syncprogress.SyncProgressProvider
 import org.walleth.data.tokens.CurrentTokenProvider
 
+
 open class App : MultiDexApplication(), KodeinAware {
 
     override val kodein by Kodein.lazy {
-        bind<OkHttpClient>() with singleton { OkHttpClient.Builder().build() }
+        bind<OkHttpClient>() with singleton {
+            OkHttpClient.Builder()
+                    .addInterceptor { requestChain ->
+                        val request = requestChain.request()
+
+                        val t1 = System.nanoTime()
+                        Log.i("okhttp", String.format("Sending request %s on %s%n%s",
+                                request.url(), requestChain.connection(), request.headers()))
+
+                        val response = requestChain.proceed(request)
+
+                        val t2 = System.nanoTime()
+                        Log.i("okhttp", String.format("Received response for %s in %.1fms%n%s%n%s",
+                                response.request().url(), (t2 - t1) / 1e6, response.headers(), response.code()))
+
+                        response
+                    }
+                    .build()
+        }
 
         import(createKodein())
     }
@@ -138,7 +158,8 @@ open class App : MultiDexApplication(), KodeinAware {
             startService(Intent(this, GethTransactionSigner::class.java))
             startService(Intent(this, EtherScanService::class.java))
             startService(Intent(this, TransactionNotificationService::class.java))
-        } catch (e: IllegalStateException) {  }
+        } catch (e: IllegalStateException) {
+        }
     }
 
     companion object {

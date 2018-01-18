@@ -5,8 +5,9 @@ import android.arch.persistence.room.Entity
 import android.arch.persistence.room.PrimaryKey
 import org.kethereum.model.SignatureData
 import org.kethereum.model.Transaction
+import org.walleth.core.TransferData
 
-fun Transaction.toEntity(signatureData: SignatureData?, transactionState: TransactionState) = TransactionEntity(txHash!!, this, signatureData, transactionState)
+fun Transaction.toEntity(signatureData: SignatureData?, transactionState: TransactionState, transferData: TransferData? = null) = TransactionEntity(txHash!!, this, signatureData, transactionState, transferData)
 
 fun TransactionEntity.setHash(newHash: String) {
         hash = newHash
@@ -25,5 +26,8 @@ data class TransactionEntity(
         var signatureData: SignatureData?,
 
         @Embedded
-        var transactionState: TransactionState
+        var transactionState: TransactionState,
+
+        @Embedded
+        var transferData: TransferData?
 )

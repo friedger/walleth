@@ -2,6 +2,7 @@ package org.walleth.core
 
 import android.arch.lifecycle.*
 import android.content.Intent
+import android.net.TrafficStats
 import com.github.salomonbrys.kodein.LazyKodein
 import com.github.salomonbrys.kodein.android.appKodein
 import com.github.salomonbrys.kodein.instance
@@ -30,9 +31,9 @@ import org.walleth.data.transactions.TransactionEntity
 import org.walleth.data.transactions.setHash
 import org.walleth.khex.toHexString
 import java.io.IOException
+import java.lang.Thread.sleep
 import java.math.BigInteger
-import java.math.BigInteger.ONE
-import java.math.BigInteger.ZERO
+import java.math.BigInteger.*
 import java.security.cert.CertPathValidatorException
 
 class EtherScanService : LifecycleService() {
@@ -50,7 +51,7 @@ class EtherScanService : LifecycleService() {
         private var last_run = 0L
         private var shortcut = false
 
-        private var lastSeenTransactionsBlock = ZERO
+        private var lastSeenTransactionsBlock = mutableMapOf<String, BigInteger>()
         private var lastSeenBalanceBlock = ZERO
     }
 
@@ -71,7 +72,7 @@ class EtherScanService : LifecycleService() {
         override fun onChanged(p0: T?) {
             shortcut = true
             lastSeenBalanceBlock = ZERO
-            lastSeenTransactionsBlock = ZERO
+            lastSeenTransactionsBlock = mutableMapOf()
         }
     }
 
@@ -149,14 +150,22 @@ class EtherScanService : LifecycleService() {
 
     private fun queryTransactions(addressHex: String) {
         networkDefinitionProvider.value?.let { currentNetwork ->
-            val requestString = "module=account&action=txlist&address=$addressHex&startblock=$lastSeenTransactionsBlock&endblock=${lastSeenBalanceBlock + ONE}&sort=asc"
+            val currentToken = tokenProvider.currentToken
+            val requestAddressHex = if (currentToken.isETH()) {
+                addressHex
+            } else {
+                currentToken.address.hex
+            }
+            val requestString =
+                    "module=account&action=txlist&address=$requestAddressHex&startblock=${lastSeenTransactionsBlock.getOrDefault(requestAddressHex, lastSeenBalanceBlock - TEN)}&endblock=${lastSeenBalanceBlock + ONE}&sort=asc"
 
             val etherscanResult = getEtherscanResult(requestString, currentNetwork)
             if (etherscanResult != null) {
                 val jsonArray = etherscanResult.getJSONArray("result")
                 val newTransactions = parseEtherScanTransactions(jsonArray, currentNetwork.chain)
+                        .filter { addressHex in listOf(it.transaction.to?.hex, it.transaction.from?.hex, it.transferData?.tokenTo?.hex) }
 
-                lastSeenTransactionsBlock = lastSeenBalanceBlock
+                lastSeenTransactionsBlock.put(requestAddressHex, lastSeenBalanceBlock)
 
                 newTransactions.forEach {
                     val oldEntry = appDatabase.transactions.getByHash(it.hash)
@@ -220,11 +229,12 @@ class EtherScanService : LifecycleService() {
         val baseURL = networkDefinition.getBlockExplorer().baseAPIURL.letIf(httpFallback) {
             replace("https://", "http://") // :-( https://github.com/walleth/walleth/issues/134 )
         }
-        val urlString = "$baseURL/api?$requestString&apikey=$" + BuildConfig.ETHERSCAN_APIKEY
+        val urlString = "$baseURL/api?$requestString&apikey=" + BuildConfig.ETHERSCAN_APIKEY
         val url = Request.Builder().url(urlString).build()
         val newCall: Call = okHttpClient.newCall(url)
-
+        sleep(1000)
         try {
+            TrafficStats.setThreadStatsTag(100)
             newCall.execute().body().use { it?.string() }.let {
                 return JSONObject(it)
             }
