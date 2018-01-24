@@ -6,4 +6,7 @@
 
     <color name="warning">#ffcc0000</color>
     <color name="textColor">?android:attr/textColorPrimary</color>
+    <color name="transaction_error">@color/warning</color>
+    <color name="transaction_pending">@color/colorPrimary</color>
+    <color name="transaction_accepted">@color/colorAccent</color>
 </resources>

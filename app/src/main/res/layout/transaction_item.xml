@@ -10,10 +10,20 @@
         app:cardMaxElevation="8dp">
 
 
-    <android.support.v7.widget.AppCompatImageView
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_gravity="top|right">
+        <android.support.v7.widget.AppCompatImageView
             android:id="@+id/transaction_state_indicator"
             style="@style/indicator_icon"
             app:srcCompat="@drawable/ic_lock_open_black_24dp"/>
+        <android.support.v7.widget.AppCompatImageView
+            android:id="@+id/transaction_state_color"
+            style="@style/transaction_icon"
+            app:srcCompat="@drawable/ic_lock_open_black_24dp"/>
+    </LinearLayout>
 
     <LinearLayout
             android:padding="8dp"

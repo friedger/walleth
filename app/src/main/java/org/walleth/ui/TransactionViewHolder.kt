@@ -4,6 +4,7 @@ import android.support.v7.widget.RecyclerView
 import android.text.format.DateUtils
 import android.view.View
 import kotlinx.android.synthetic.main.transaction_item.view.*
+import kotlinx.android.synthetic.main.value.view.*
 import kotlinx.coroutines.experimental.CommonPool
 import kotlinx.coroutines.experimental.android.UI
 import kotlinx.coroutines.experimental.async
@@ -69,6 +70,24 @@ class TransactionViewHolder(itemView: View, private val direction: TransactionAd
                     !transactionWithState.transactionState.isPending -> R.drawable.ic_lock_black_24dp
                     transactionWithState.signatureData == null -> R.drawable.ic_lock_open_black_24dp
                     else -> R.drawable.ic_lock_outline_24dp
+                }
+        )
+
+        context.resources.getColor(
+                when {
+                    transactionWithState.transactionState.error != null -> if (direction == TransactionAdapterDirection.INCOMING) R.color.transaction_error else R.color.transaction_pending
+                    transactionWithState.transactionState.isPending -> R.color.transaction_pending
+                    else -> R.color.transaction_accepted
+                }
+        ).let {
+            itemView.difference.current_eth.setTextColor(it)
+            itemView.difference.current_token_symbol.setTextColor(it)
+        }
+        itemView.transaction_state_color.setImageResource(
+                when {
+                    transactionWithState.transactionState.error != null -> if (direction == TransactionAdapterDirection.INCOMING) R.drawable.ic_transaction_error else R.drawable.ic_transaction_pending
+                    transactionWithState.transactionState.isPending -> R.drawable.ic_transaction_pending
+                    else -> R.drawable.ic_transaction_accepted
                 }
         )
 
